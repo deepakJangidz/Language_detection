@@ -99,4 +99,6 @@ print(f"Detected language folders: {lang_folders}")
 
 # Process each folder
 for folder in lang_folders:
+    if os.path.exists(f'new_data/test/{folder}'):
+        continue
     create_melspec(folder, train=20000, test=2000)

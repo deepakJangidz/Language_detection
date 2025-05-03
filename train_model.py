@@ -30,8 +30,8 @@ model = CNN_model_3(opt_fun=torch.optim.Adam, lr=0.001)
 # our transformations when importing the images
 transformations = tf.Compose([tf.Resize([64,64]), tf.ToTensor()])
 # load in train / test data
-trainset = ImageFolder('data/train', transform=transformations)
-testset = ImageFolder('data/test', transform=transformations)
+trainset = ImageFolder('new_data/train', transform=transformations)
+testset = ImageFolder('new_data/test', transform=transformations)
 # record the classes
 classes = trainset.classes
 
