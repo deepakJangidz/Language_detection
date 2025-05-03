@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 # NOTE: optimal paramters are lr=0.001 and optimzier=Adam
 class CNN_model_3(nn.Module):
-    def __init__(self, opt_fun, lr, **opt_params):
+    def __init__(self, opt_fun = None, lr = None, **opt_params):
         '''
         opt_fun = optimizer function (eg: torch.optim.SGD)
         lr = learning rate
@@ -64,7 +64,11 @@ class CNN_model_3(nn.Module):
             nn.Linear(512, 10))   # output of 10 for each of our class
 
         self.loss = nn.CrossEntropyLoss()
-        self.optimizer = opt_fun(self.parameters(), lr=lr, **opt_params)
+        # self.optimizer = opt_fun(self.parameters(), lr=lr, **opt_params)
+        if opt_fun is not None and lr is not None:
+            self.optimizer = opt_fun(self.parameters(), lr=lr, **opt_params)
+        else:
+            self.optimizer = None
 
     def forward(self, x):
         """Perform a forward pass and return the outputs"""

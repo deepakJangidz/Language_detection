@@ -119,4 +119,7 @@ print(f"The MP3 files are stored in the folders: {lang_folders}")
 
 # process each folder
 for folder in lang_folders:
-    create_melspec(folder, train=20000, test=2000)
+    if os.path.exists(f'data/test/{folder}'):
+        print(f"Already exists, skipping: {f'data/test/{folder}'}")
+        continue
+    create_melspec(folder, train=0, test=2000)

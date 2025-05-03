@@ -10,6 +10,20 @@
 # scikit-learn==0.23.1
 # pillow==7.2.0
 
+# streamlit==1.33.0
+# pandas==2.2.1
+# numpy==1.26.4
+# matplotlib==3.8.4
+# librosa==0.10.1
+# scikit-learn==1.4.2
+# pillow==10.3.0
+
+# CPU-only PyTorch
+# --extra-index-url https://download.pytorch.org/whl/cpu
+# torch==2.2.2+cpu
+# torchvision==0.17.2+cpu
+
+
 streamlit==1.33.0
 pandas==2.2.1
 numpy==1.26.4
@@ -19,6 +33,6 @@ scikit-learn==1.4.2
 pillow==10.3.0
 
 # CPU-only PyTorch
-# --extra-index-url https://download.pytorch.org/whl/cpu
-# torch==2.2.2+cpu
-# torchvision==0.17.2+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu

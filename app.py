@@ -13,26 +13,29 @@ from collections import Counter
 
 from model import CNN_model_3
 
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+
+
 ############ SETUP ENVIRONMENT ################################################
-# st.set_option('deprecation.showfileUploaderEncoding', False)
-# st.beta_set_page_config(page_title='Language AI', initial_sidebar_state='expanded')
 st.set_page_config(page_title='Language AI', initial_sidebar_state='expanded')
 
 
 # Our labels for the classes (DO NOT CHANGE ORDER)
-# classes = ["English", "French", "German", "Italian", "Spanish"]
 classes = [ "Bengali", "Gujarati", "Hindi", "Kannada", "Malayalam", "Marathi", "Punjabi", "Tamil", "Telugu", "Urdu"]
 
 # transformations for our spectrograms
 transformer = tf.Compose([tf.Resize([64,64]), tf.ToTensor()])
 
 # load our saved model function with caching
-# @st.cache(allow_output_mutation=True)
-# def load_model(path="trained_model_3_state.pt"):
 @st.cache_resource
 def load_model(path="cnn_model_trained.pt"):
     model = CNN_model_3(opt_fun=torch.optim.Adam, lr=0.001)
-    model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
+    
+    model.load_state_dict(torch.load(path, map_location=device))
+    model.to(device)
     return model
 
 # @st.cache(allow_output_mutation=True, suppress_st_warning=True)
@@ -158,6 +161,7 @@ if mp3_file is not None:
 
             # run predictions
             model.eval()
+            image = image.to(device)
             output = model(image)
             print(f'output is {output}')
             _, predicted = torch.max(output, dim=1)

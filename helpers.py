@@ -99,9 +99,8 @@ def fit(epochs, model, train_loader, val_loader, grad_clip=False):
     # Instantiate our model and empty lists to record metrics
     # model.cuda() # move model to GPU'
 
-    device = torch.device("cpu")
     # device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    model.to(device)    
+    # model.to(device)    
 
     train_losses = []
     train_accuracies = []
