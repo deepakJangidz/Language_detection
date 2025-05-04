@@ -5,190 +5,163 @@ import matplotlib.pyplot as plt
 import librosa
 import librosa.display
 import torch
-import torchvision
 import torchvision.transforms as tf
 import io
 from PIL import Image
 from collections import Counter
-
 from model import CNN_model_3
 
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, WebRtcMode
+import av
+import tempfile
+import soundfile as sf
+import noisereduce as nr
+from pydub import AudioSegment
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-
-
-############ SETUP ENVIRONMENT ################################################
+# Streamlit config
 st.set_page_config(page_title='Language AI', initial_sidebar_state='expanded')
 
+# Class labels
+classes = ["Bengali", "Gujarati", "Hindi", "Kannada", "Malayalam", "Marathi", "Punjabi", "Tamil", "Telugu", "Urdu"]
+transformer = tf.Compose([tf.Resize([64, 64]), tf.ToTensor()])
 
-# Our labels for the classes (DO NOT CHANGE ORDER)
-classes = [ "Bengali", "Gujarati", "Hindi", "Kannada", "Malayalam", "Marathi", "Punjabi", "Tamil", "Telugu", "Urdu"]
-
-# transformations for our spectrograms
-transformer = tf.Compose([tf.Resize([64,64]), tf.ToTensor()])
-
-# load our saved model function with caching
 @st.cache_resource
-def load_model(path="cnn_model_trained.pt"):
+def load_model(path="cnn_model_trained_new.pt"):
     model = CNN_model_3(opt_fun=torch.optim.Adam, lr=0.001)
-    
     model.load_state_dict(torch.load(path, map_location=device))
     model.to(device)
     return model
 
-# @st.cache(allow_output_mutation=True, suppress_st_warning=True)
 @st.cache_resource
 def load_audio(file, sr=16000):
     clip, sample_rate = librosa.load(file, sr=sr)
     return clip, sample_rate
 
-# load the model
-model = load_model("cnn_model_trained.pt")
+model = load_model()
 
-"""
-# Language Detection AI
+# App title
+st.title("Language Detection AI")
+st.markdown("AI bot trained to detect the language from speech using Deep Learning")
 
-AI bot trained to detect the language from speech using Deep Learning
+# 🎤 Voice recording class
+class AudioProcessor(AudioProcessorBase):
+    def __init__(self):
+        self.recorded_frames = []
 
-##
-"""
-# landing screen
+    def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
+        audio = frame.to_ndarray()
+        self.recorded_frames.append(audio)
+        return frame
+
+# === SIDEBAR ===
+st.sidebar.markdown("## Upload or Record Audio")
+mp3_file = st.sidebar.file_uploader("Upload MP3 File:", type=["mp3"])
+preset = st.sidebar.radio("Or Choose a Preset:", options=["None"] + classes)
+
+st.sidebar.markdown("## Or Record Your Voice")
+# ctx = webrtc_streamer(
+#     key="recorder",
+#     mode="sendonly",
+#     in_audio=True,
+#     audio_processor_factory=AudioProcessor
+# )
+ctx = webrtc_streamer(
+    key="recorder",
+    mode=WebRtcMode.SENDONLY,  
+    audio_processor_factory=AudioProcessor,
+    media_stream_constraints={"audio": True, "video": False}
+)
+
+recorded_file_path = None
+if ctx and ctx.audio_processor and ctx.audio_processor.recorded_frames:
+    st.sidebar.success("Recording complete. Processing...")
+    recorded_audio = np.concatenate(ctx.audio_processor.recorded_frames, axis=1).flatten().astype(np.float32)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_wav:
+        sf.write(tmp_wav.name, recorded_audio, samplerate=16000)
+        recorded_file_path = tmp_wav.name
+
+    # Apply noise reduction
+    reduced_audio = nr.reduce_noise(y=recorded_audio, sr=16000)
+    clean_path = recorded_file_path.replace(".wav", "_clean.wav")
+    sf.write(clean_path, reduced_audio, 16000)
+
+    # Convert to MP3
+    sound = AudioSegment.from_wav(clean_path)
+    mp3_path = clean_path.replace(".wav", ".mp3")
+    sound.export(mp3_path, format="mp3")
+
+    mp3_file = mp3_path
+    st.sidebar.success("Cleaned voice ready for detection.")
+
+# === MAIN LOGIC ===
 imagewidth = 550
 placeholder = st.empty()
 placeholder.image('assets/speechbubble.png', width=imagewidth)
 
-
-############ SIDEBAR CONFIGURE ################################################
-
-# Ask user to upload a voice file for language classification
-st.sidebar.markdown('## Upload Voice Clip')
-mp3_file = st.sidebar.file_uploader("Upload Your MP3 File Here:", type=["mp3"])
-
-# allow users to choose a preloaded sample
-st.sidebar.markdown("""## Or Use a Preset Audio Clip:""")
-preset = st.sidebar.radio("Choose a Language", options=["None"]+classes)
-
-st.sidebar.header("") # add some empty space
-st.sidebar.header("") # add some empty space
-
-st.sidebar.markdown(
-"""
------------
-## Instructions
-1. Upload a voice clip or select a **preset sample** audio file above
-2. Click on 'Start' to begin detecting the language
-3. View the results
-4. Upload a new file or choose another preset to try again
-5. If you are getting 'NaN', use clips longer than 4 seconds
-""")
-
-st.sidebar.header("") # add some empty space
-st.sidebar.header("") # add some empty space
-st.sidebar.header("") # add some empty space
-
-st.sidebar.markdown(
-"""
------------
-
-## Github
-Creator: Deepak Kumar, Akanksha Bhayekar
-
-Project Repository: [Link Here](https://github.com/deepakJangidz/Audio-Language-Classifier)
-""")
-
-
-############ RUN MODEL AND RETURN OUTPUT########################################
-# if no files are uploaded, use preset ones by default
-
-if mp3_file is None:
-    if preset in classes:
-        mp3_file = f'assets/{preset}_preset.mp3'
-    else:
-        mp3_file = None  # or handle unexpected preset
+# Use preset audio if nothing is uploaded
+if mp3_file is None and preset in classes:
+    mp3_file = f'assets/{preset}_preset.mp3'
 
 if mp3_file is not None:
-
     placeholder.image("assets/speechbubble2.png", width=imagewidth)
-    st.audio(mp3_file) # allows users to play back uploaded files
+    st.audio(mp3_file)
 
-    # set up the progress animations and initialize empty lists
     status_text = st.empty()
     progress_bar = st.empty()
     predictions = []
 
     status_text.text('Press Start To Begin Detection...')
     if st.button('Start'):
-
-        # load our audio file into array
         status_text.text('Rendering Audio File...')
         clip, sample_rate = load_audio(mp3_file, sr=16000)
 
+        # Process only the first 60 seconds of the audio
         duration = len(clip)
-        num_samples = int(duration/60000) # number of samples we can extract from this file
-        start = 0     # starting sample window
-        end = 60000   # end sample window
+        end = min(duration, 60 * sample_rate)  # 60 seconds in samples
 
-        # take a sample from our uploaded voice clip
+        # Make sure to only use the first 60 seconds
+        clip_new = clip[:end]
+
+        # Convert the clip to mel spectrogram
+        fig = plt.figure(figsize=[0.75, 0.75])
+        ax = fig.add_subplot(111)
+        ax.axes.get_xaxis().set_visible(False)
+        ax.axes.get_yaxis().set_visible(False)
+        ax.set_frame_on(False)
+
+        mel_spec = librosa.feature.melspectrogram(
+            y=clip_new, n_fft=2048, hop_length=512, n_mels=64,
+            sr=sample_rate, power=1.0, fmin=20, fmax=8000
+        )
+        librosa.display.specshow(librosa.amplitude_to_db(mel_spec, ref=np.max), fmax=8000, sr=sample_rate)
+
+        mel = io.BytesIO()
+        plt.savefig(mel, dpi=400, bbox_inches='tight', pad_inches=0)
+        plt.close('all')
+
+        image = Image.open(mel).convert('RGB')
+        image = transformer(image).float().unsqueeze(0).to(device)
+
+        # Run the model on the spectrogram image
         model.eval()
-        for i in range(num_samples):
-            prog = int(((i+1)/num_samples)*100)
-            status_text.text(f"Analysing Audio: {prog}%")
-            progress_bar.progress(prog)
+        output = model(image)
+        _, predicted = torch.max(output, dim=1)
+        predictions.append(classes[predicted[0].item()])
 
-            clip_new = clip[start:end]
-
-            # initialize our plot for the melspectrogram
-            fig = plt.figure(figsize=[0.75,0.75])
-            ax = fig.add_subplot(111)
-            ax.axes.get_xaxis().set_visible(False)
-            ax.axes.get_yaxis().set_visible(False)
-            ax.set_frame_on(False)
-            mel_spec = librosa.feature.melspectrogram(y=clip_new, n_fft=2048, hop_length=512, n_mels=64,
-                                              sr=sample_rate, power=1.0, fmin=20, fmax=8000)
-            librosa.display.specshow(librosa.amplitude_to_db(mel_spec, ref=np.max), fmax=8000, sr=sample_rate)
-
-            mel = io.BytesIO()
-            plt.savefig(mel, dpi=400, bbox_inches='tight', pad_inches=0)
-            plt.close('all')
-
-            # load image to tensor and correct dimensions for our model
-            image = Image.open(mel).convert('RGB')
-            image = transformer(image).float()
-            # image = torch.tensor(image, requires_grad=True)
-            image = image.unsqueeze(0)
-
-            # run predictions
-            model.eval()
-            image = image.to(device)
-            output = model(image)
-            print(f'output is {output}')
-            _, predicted = torch.max(output, dim=1)
-            print(f'predicted is {predicted}')
-
-
-            # record predictions and update sample windows
-            predictions.append(classes[predicted[0].item()])
-            start += 60000
-            end += 60000
-
-        # output our results now
         status_text.empty()
         progress_bar.empty()
 
-        # tally up the predictions for each sample
+        # Calculate percentage breakdown of predictions
         results = Counter(predictions)
-        print(f'Predictions are {predictions}')
-        print(f'Result is {results}')
-
-        # placeholder value of 0 for languages that did not appear
         for c in classes:
-            if c in results.keys():
-                pass
-            else:
-                results[c] = 0
+            results.setdefault(c, 0)
 
+        df = pd.DataFrame.from_dict(results, orient='index', columns=['percent']).T.div(1) * 100
+        highest_prediction = df.idxmax(axis=1).iloc[0]
+        confidence = df.loc['percent', highest_prediction]
 
         language_image_map = {
             "Bengali": "Group 300.png",
@@ -203,30 +176,14 @@ if mp3_file is not None:
             "Urdu": "Group 308.png"
         }
 
-        # Check the highest prediction and its confidence
-        threshold = 60  # percentage threshold
-        df = pd.DataFrame.from_dict(results, orient='index', columns=['percent']).T.div(num_samples) * 100
-        highest_prediction = df.idxmax(axis=1).iloc[0]
-        print(f'Highest prediction is {highest_prediction}')
-        confidence = df.loc['percent', highest_prediction]
-        print(f'Confidence is {confidence}')
-
-       # Show image based on prediction confidence
-        if confidence >= threshold:
-            # Get the corresponding image filename from the map
+        if confidence >= 60:
             image_filename = language_image_map.get(highest_prediction, "speechbubble_default.png")
         else:
-            # Show an uncertain image if the confidence is below threshold
             image_filename = "speechbubble_uncertain.png"
 
-        # Display the chosen image
         placeholder.image(f'assets/{image_filename}', width=imagewidth)
 
-        # Display breakdown of predictions
-        st.write("""
-        ----------
-        # Breakdown
-        By percentage of languages the AI thinks it is
-        """)
+        st.markdown("----------")
+        st.markdown("### Breakdown by percentage")
         st.dataframe(df, width=600)
         st.bar_chart(df.T, height=400, use_container_width=True)

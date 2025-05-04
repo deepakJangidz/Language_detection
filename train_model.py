@@ -69,7 +69,7 @@ train_losses, train_accuracies, val_losses, val_accuracies = history
 
 ##########################################################
 # Step 5: Score the model and output performance metrics #
-##########################################################
+##########################################################python 
 # load our test data loader onto GPU
 test_dl = DeviceDataLoader(DataLoader(testset, batch_size*2), device)
 # calculate the loss and accuracy
@@ -88,7 +88,7 @@ generate_cm(model, test_dl, classes)
 ##########################################################
 # Step 6: Save our model                                 #
 ##########################################################
-torch.save(model.state_dict(), "cnn_model_trained.pt")
+torch.save(model.state_dict(), "cnn_model_trained_new.pt")
 print("Model has been saved as 'cnn_model_trained.pt'. Use torch.load to load the saved model")
 
 
